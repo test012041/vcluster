@@ -1,0 +1,30 @@
+sync:
+  fromHost:
+    nodes:
+      enabled: false
+policies:
+  resourceQuota:
+    enabled: false
+    quota:
+      services.loadbalancers: 2
+      services.nodeports: 4
+  limitRange:
+    enabled: false
+  networkPolicy:
+    enabled: false
+controlPlane:
+  backingStore:
+    etcd:
+      deploy:
+        statefulSet:
+          resources:
+            requests:
+              cpu: "0"
+
+  statefulSet:
+    env:
+    - name: DEBUG
+      value: "true"
+    resources:
+      requests:
+        cpu: "0"

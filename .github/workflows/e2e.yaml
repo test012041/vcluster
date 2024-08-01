@@ -106,6 +106,7 @@ jobs:
           sudo apt-get install -y jq
           paths=$(ls -d ./test/e2e*)
           echo "matrix=$(printf '%s\n' "${paths}" | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+          echo "Matrix: ${matrix}"
     outputs:
       matrix: ${{ steps.set-paths-matrix.outputs.matrix }}
 
@@ -323,11 +324,35 @@ jobs:
 
       # - name: Setup upterm session for debugging
       #   uses: lhotari/action-upterm@v1
+      
+      - name: Setup Environment
+        run: |
+          sudo apt-get install -y sed
+
+          sed -i "s|REPLACE_REPOSITORY_NAME|${{ env.REPOSITORY_NAME }}|g" ${{ matrix.test-suite-path }}/../commonValues.yaml
+          sed -i "s|REPLACE_TAG_NAME|${{ env.TAG_NAME }}|g" ${{ matrix.test-suite-path }}/../commonValues.yaml
+
+          kind load image-archive vcluster_syncer
+
+          chmod +x vcluster && sudo mv vcluster /usr/bin
+
+      - name: Check if values.yaml exists
+        id: check-values
+        run: |
+          echo "matrix.test-suite-path: " ${{ matrix.test-suite-path }}
+          if [[ -f "${{ matrix.test-suite-path }}/values.yaml" ]]; then
+            echo "values_yaml_exists=true" >> $GITHUB_ENV
+          else
+            echo "values_yaml_exists=false" >> $GITHUB_ENV
+          fi
 
       - name: Create vcluster
         id: create-vcluster
+        if: env.values_yaml_exists == 'true'
         run: |
           set -x
+
+          echo "VCLUSTER_DISTRO=${{ matrix.distribution }}" >> $GITHUB_ENV
 
           extraArgs=()
           if [ ${{ matrix.multinamespace-mode }} == "true" ]; then
@@ -346,15 +371,6 @@ jobs:
             kubectl apply -f ${{ matrix.test-suite-path }}/role.yaml
           fi
 
-          sudo apt-get install -y sed
-
-          sed -i "s|REPLACE_REPOSITORY_NAME|${{ env.REPOSITORY_NAME }}|g" ${{ matrix.test-suite-path }}/../commonValues.yaml
-          sed -i "s|REPLACE_TAG_NAME|${{ env.TAG_NAME }}|g" ${{ matrix.test-suite-path }}/../commonValues.yaml
-
-          kind load image-archive vcluster_syncer
-
-          chmod +x vcluster && sudo mv vcluster /usr/bin
-
           vcluster create ${{ env.VCLUSTER_SUFFIX }} -n ${{ env.VCLUSTER_NAMESPACE }} \
           --create-namespace \
           --debug \
@@ -369,7 +385,7 @@ jobs:
 
       - name: Wait until vcluster is ready
         id: wait-until-vcluster-is-ready
-        if: steps.create-vcluster.outcome == 'success'
+        if: env.values_yaml_exists == 'true' && steps.create-vcluster.outcome == 'success'
         run: |
           set -x
 
@@ -378,7 +394,7 @@ jobs:
         continue-on-error: true
 
       - name: Collect deployment information in case vcluster fails to start
-        if: steps.wait-until-vcluster-is-ready.outcome != 'success'
+        if: env.values_yaml_exists == 'true' && steps.wait-until-vcluster-is-ready.outcome != 'success'
         run: |
           set -x
           kubectl get pods -o yaml -n ${{ env.VCLUSTER_NAMESPACE }}
@@ -404,6 +420,15 @@ jobs:
           sudo chmod +x $(echo "${{ matrix.test-suite-path }}" | sed "s#./test/##g").test
 
           VCLUSTER_SUFFIX=${{ env.VCLUSTER_SUFFIX }} VCLUSTER_NAME=${{ env.VCLUSTER_NAME }} VCLUSTER_NAMESPACE=${{ env.VCLUSTER_NAMESPACE }} MULTINAMESPACE_MODE=${{ matrix.multinamespace-mode }} ./$(echo "${{ matrix.test-suite-path }}" | sed "s#./test/##g").test -test.v --ginkgo.v --ginkgo.skip='.*NetworkPolicy.*' --ginkgo.fail-fast
+
+        continue-on-error: true
+      
+      - name: check vCluster logs
+        id: check-vcluster-logs
+        if: env.values_yaml_exists == 'true'
+        run: |
+          set -x
+
           if kubectl logs -l app=${{ env.VCLUSTER_SUFFIX }} -n ${{ env.VCLUSTER_NAMESPACE }} -c syncer --tail=-1 -p >/dev/null 2>/dev/null; then
             echo "vCluster has restarted during testing, failing..."
             exit 1
@@ -412,7 +437,7 @@ jobs:
         continue-on-error: true
 
       - name: Print logs if e2e tests fail
-        if: steps.execute-e2e-tests.outcome == 'failure'
+        if: env.values_yaml_exists == 'true' && steps.execute-e2e-tests.outcome == 'failure'
         run: |
           set -x
           kubectl get pods -o yaml -n ${{ env.VCLUSTER_NAMESPACE }}
