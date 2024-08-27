@@ -2,7 +2,7 @@ name: E2E Test Features CI
 
 on:
   schedule:
-    - cron: '* * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch: 
 
 env:
@@ -97,11 +97,8 @@ jobs:
       
       - name: Build e2e binary
         run: |
-          cd ./test/features
-          go_files=$(find . -name '*.go' ! -name '*_test.go' ! -name 'helpers.go')
-          for file in $go_files; do
-            go build -mod=vendor -o "${file%.go}.test" "$file"
-          done
+          cd ./test
+          go run -mod=vendor github.com/onsi/ginkgo/v2/ginkgo build --require-suite -r --mod vendor $(ls -d ./features/* | jq -R . | jq -rcs '. | join(" \\\n")')
         env:
           GOWORK: off
 
@@ -109,7 +106,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-binaries
-          path: test/features/*.test
+          path: test/features/**/*.test
           retention-days: 7
   
   generate-matrix:
@@ -121,12 +118,12 @@ jobs:
       - name: List Go files
         id: set-paths-matrix
         run: |
-          cd ./test/features
+          cd ./test
           set -x
           sudo apt-get install -y jq
 
-          go_files=$(find . -name '*.go' ! -name '*_test.go' | sed 's#^./##' | sed 's/\.go$//')
-          echo "matrix=$(printf '%s\n' "${go_files}" | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+          paths=$(ls -d ./features/*/)
+          echo "matrix=$(printf '%s\n' "${paths}" | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
 
     outputs:
       matrix: ${{ steps.set-paths-matrix.outputs.matrix }}
@@ -191,19 +188,19 @@ jobs:
           
           chmod +x vcluster && sudo mv vcluster /usr/bin
 
-          cd ./test/features
+          cd ./test
 
           sudo apt-get install -y sed
 
-          sed -i "s|REPLACE_REPOSITORY_NAME|${{ env.REPOSITORY_NAME }}|g" commonValues.yaml
-          sed -i "s|REPLACE_TAG_NAME|${{ env.TAG_NAME }}|g" commonValues.yaml
+          sed -i "s|REPLACE_REPOSITORY_NAME|${{ env.REPOSITORY_NAME }}|g" ${{ matrix.test-suite-path }}commonValues.yaml
+          sed -i "s|REPLACE_TAG_NAME|${{ env.TAG_NAME }}|g" ${{ matrix.test-suite-path }}commonValues.yaml
 
           vcluster create ${{ env.VCLUSTER_SUFFIX }} -n ${{ env.VCLUSTER_NAMESPACE }} \
           --create-namespace \
           --debug \
           --connect=false \
-          --local-chart-dir ../../chart \
-          -f commonValues.yaml 
+          --local-chart-dir ../chart \
+          -f ${{ matrix.test-suite-path }}commonValues.yaml 
         continue-on-error: true
 
       - name: Wait until vcluster is ready
@@ -236,10 +233,12 @@ jobs:
           set -x
           
           cd ./test/features
-        
-          sudo chmod +x $(echo "${{ matrix.test-suite-path }}").test
+                  
+          cd $(echo "${{ matrix.test-suite-path }}" | sed -e 's#^./features/##' -e 's#/$##')
+
+          sudo chmod +x $(echo "${{ matrix.test-suite-path }}" | sed -e 's#^./features/##' -e 's#/$##').test
           
-          VCLUSTER_SUFFIX=${{ env.VCLUSTER_SUFFIX }} VCLUSTER_NAME=${{ env.VCLUSTER_NAME }} VCLUSTER_NAMESPACE=${{ env.VCLUSTER_NAMESPACE }} ./$(echo "${{ matrix.test-suite-path }}").test -test.v --ginkgo.v --ginkgo.skip='.*NetworkPolicy.*' --ginkgo.fail-fast
+          VCLUSTER_SUFFIX=${{ env.VCLUSTER_SUFFIX }} VCLUSTER_NAME=${{ env.VCLUSTER_NAME }} VCLUSTER_NAMESPACE=${{ env.VCLUSTER_NAMESPACE }} ./$(echo "${{ matrix.test-suite-path }}" | sed -e 's#^./features/##' -e 's#/$##').test -test.v --ginkgo.v --ginkgo.skip='.*NetworkPolicy.*' --ginkgo.fail-fast
         
           if kubectl logs -l app=${{ env.VCLUSTER_SUFFIX }} -n ${{ env.VCLUSTER_NAMESPACE }} -c syncer --tail=-1 -p >/dev/null 2>/dev/null; then
             echo "vCluster has restarted during testing, failing..."
