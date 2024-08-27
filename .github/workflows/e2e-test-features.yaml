@@ -122,7 +122,7 @@ jobs:
           set -x
           sudo apt-get install -y jq
 
-          go_files=$(find . -name '*.go' ! -name '*_test.go')
+          go_files=$(find . -name '*.go' ! -name '*_test.go' | sed 's/\.go$//')
           echo "matrix=$(printf '%s\n' "${go_files}" | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
 
     outputs:
