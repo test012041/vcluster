@@ -97,8 +97,11 @@ jobs:
       
       - name: Build e2e binary
         run: |
-          cd ./test
-          go run -mod=vendor github.com/onsi/ginkgo/v2/ginkgo build --require-suite -r --mod vendor $(ls -d ./features | jq -R . | jq -rcs '. | join(" \\\n")')
+          cd ./test/features
+          go_files=$(find . -name '*.go' ! -name '*_test.go' ! -name 'helpers.go')
+          for file in $go_files; do
+            go build -mod=vendor -o "${file%.go}.test" "$file"
+          done
         env:
           GOWORK: off
 
