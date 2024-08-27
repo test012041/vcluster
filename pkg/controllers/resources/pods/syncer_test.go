@@ -9,6 +9,7 @@ import (
 	"github.com/loft-sh/vcluster/pkg/specialservices"
 	"github.com/loft-sh/vcluster/pkg/syncer/synccontext"
 	syncertesting "github.com/loft-sh/vcluster/pkg/syncer/testing"
+	testingutil "github.com/loft-sh/vcluster/pkg/util/testing"
 	"github.com/loft-sh/vcluster/pkg/util/translate"
 	"gotest.tools/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -22,8 +23,8 @@ import (
 var (
 	pVclusterService = corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      syncertesting.DefaultTestVClusterServiceName,
-			Namespace: syncertesting.DefaultTestCurrentNamespace,
+			Name:      testingutil.DefaultTestVClusterServiceName,
+			Namespace: testingutil.DefaultTestCurrentNamespace,
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP: "1.2.3.4",
@@ -31,8 +32,8 @@ var (
 	}
 	pDNSService = corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      translate.Default.HostName(nil, "kube-dns", "kube-system"),
-			Namespace: syncertesting.DefaultTestTargetNamespace,
+			Name:      translate.Default.HostName(nil, "kube-dns", "kube-system").Name,
+			Namespace: testingutil.DefaultTestTargetNamespace,
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP: "2.2.2.2",
@@ -41,7 +42,7 @@ var (
 )
 
 func TestSyncTable(t *testing.T) {
-	translate.Default = translate.NewSingleNamespaceTranslator(syncertesting.DefaultTestTargetNamespace)
+	translate.Default = translate.NewSingleNamespaceTranslator(testingutil.DefaultTestTargetNamespace)
 	specialservices.Default = specialservices.NewDefaultServiceSyncer()
 
 	vNamespace := corev1.Namespace{
@@ -54,7 +55,7 @@ func TestSyncTable(t *testing.T) {
 		Namespace: vNamespace.Name,
 	}
 	pObjectMeta := metav1.ObjectMeta{
-		Name:      translate.Default.HostName(nil, "testpod", "testns"),
+		Name:      translate.Default.HostName(nil, "testpod", "testns").Name,
 		Namespace: "test",
 		Annotations: map[string]string{
 			podtranslate.ClusterAutoScalerAnnotation:  "false",
@@ -65,6 +66,8 @@ func TestSyncTable(t *testing.T) {
 			translate.UIDAnnotation:                   "",
 			translate.NamespaceAnnotation:             vObjectMeta.Namespace,
 			translate.KindAnnotation:                  corev1.SchemeGroupVersion.WithKind("Pod").String(),
+			translate.HostNamespaceAnnotation:         "test",
+			translate.HostNameAnnotation:              translate.Default.HostName(nil, "testpod", "testns").Name,
 			podtranslate.ServiceAccountNameAnnotation: "",
 			podtranslate.UIDAnnotation:                string(vObjectMeta.UID),
 		},
@@ -90,7 +93,6 @@ func TestSyncTable(t *testing.T) {
 		nodeSelectorOption       map[string]string
 		syncToHost               bool
 		securityStandard         string
-		syncLabels               []string
 		virtualPodsLabels        map[string]string
 		expectPhysicalPodsLabels map[string]string
 	}{
@@ -163,7 +165,6 @@ func TestSyncTable(t *testing.T) {
 			syncToHost:               true,
 			expectVirtualPod:         true,
 			virtualPodWithoutNode:    true,
-			syncLabels:               []string{"test.sh/*"},
 			virtualPodsLabels:        map[string]string{"test.sh/abcd": "yes"},
 			expectPhysicalPodsLabels: map[string]string{"test.sh/abcd": "yes"},
 		},
@@ -270,7 +271,6 @@ func TestSyncTable(t *testing.T) {
 			if tC.securityStandard != "" {
 				registerContext.Config.Policies.PodSecurityStandard = tC.securityStandard
 			}
-			registerContext.Config.Experimental.SyncSettings.SyncLabels = tC.syncLabels
 
 			syncCtx, syncer := syncertesting.FakeStartSyncer(t, registerContext, New)
 
@@ -288,7 +288,7 @@ func TestSyncTable(t *testing.T) {
 }
 
 func TestSync(t *testing.T) {
-	translate.Default = translate.NewSingleNamespaceTranslator(syncertesting.DefaultTestTargetNamespace)
+	translate.Default = translate.NewSingleNamespaceTranslator(testingutil.DefaultTestTargetNamespace)
 	specialservices.Default = specialservices.NewDefaultServiceSyncer()
 
 	PodLogsVolumeName := "pod-logs"
@@ -329,18 +329,18 @@ func TestSync(t *testing.T) {
 
 	pVclusterService := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      syncertesting.DefaultTestVClusterServiceName,
-			Namespace: syncertesting.DefaultTestCurrentNamespace,
+			Name:      testingutil.DefaultTestVClusterServiceName,
+			Namespace: testingutil.DefaultTestCurrentNamespace,
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP: "1.2.3.4",
 		},
 	}
-	translate.VClusterName = syncertesting.DefaultTestVClusterName
+	translate.VClusterName = testingutil.DefaultTestVClusterName
 	pDNSService := corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      translate.Default.HostName(nil, "kube-dns", "kube-system"),
-			Namespace: syncertesting.DefaultTestTargetNamespace,
+			Name:      translate.Default.HostName(nil, "kube-dns", "kube-system").Name,
+			Namespace: testingutil.DefaultTestTargetNamespace,
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP: "2.2.2.2",
@@ -356,7 +356,7 @@ func TestSync(t *testing.T) {
 		Namespace: vNamespace.Name,
 	}
 	pObjectMeta := metav1.ObjectMeta{
-		Name:      translate.Default.HostName(nil, "testpod", "testns"),
+		Name:      translate.Default.HostName(nil, "testpod", "testns").Name,
 		Namespace: "test",
 		Annotations: map[string]string{
 			podtranslate.ClusterAutoScalerAnnotation:  "false",
@@ -367,6 +367,8 @@ func TestSync(t *testing.T) {
 			translate.UIDAnnotation:                   "",
 			translate.NamespaceAnnotation:             vObjectMeta.Namespace,
 			translate.KindAnnotation:                  corev1.SchemeGroupVersion.WithKind("Pod").String(),
+			translate.HostNameAnnotation:              translate.Default.HostName(nil, "testpod", "testns").Name,
+			translate.HostNamespaceAnnotation:         "test",
 			podtranslate.ServiceAccountNameAnnotation: "",
 			podtranslate.UIDAnnotation:                string(vObjectMeta.UID),
 		},
@@ -393,14 +395,14 @@ func TestSync(t *testing.T) {
 
 	vHostpathNamespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: syncertesting.DefaultTestCurrentNamespace,
+			Name: testingutil.DefaultTestCurrentNamespace,
 		},
 	}
 
 	vHostPathPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      HostpathPodName,
-			Namespace: syncertesting.DefaultTestCurrentNamespace,
+			Namespace: testingutil.DefaultTestCurrentNamespace,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -452,13 +454,13 @@ func TestSync(t *testing.T) {
 		},
 	}
 
-	vHostPath := fmt.Sprintf(podtranslate.VirtualPathTemplate, syncertesting.DefaultTestCurrentNamespace, syncertesting.DefaultTestVClusterName)
+	vHostPath := fmt.Sprintf(podtranslate.VirtualPathTemplate, testingutil.DefaultTestCurrentNamespace, testingutil.DefaultTestVClusterName)
 
 	hostToContainer := corev1.MountPropagationHostToContainer
 	pHostPathPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      translate.Default.HostName(nil, vHostPathPod.Name, syncertesting.DefaultTestCurrentNamespace),
-			Namespace: syncertesting.DefaultTestTargetNamespace,
+			Name:      translate.Default.HostName(nil, vHostPathPod.Name, testingutil.DefaultTestCurrentNamespace).Name,
+			Namespace: testingutil.DefaultTestTargetNamespace,
 
 			Annotations: map[string]string{
 				podtranslate.ClusterAutoScalerAnnotation:  "false",
@@ -469,6 +471,8 @@ func TestSync(t *testing.T) {
 				translate.NamespaceAnnotation:             vHostPathPod.Namespace,
 				translate.UIDAnnotation:                   "",
 				translate.KindAnnotation:                  corev1.SchemeGroupVersion.WithKind("Pod").String(),
+				translate.HostNamespaceAnnotation:         "test",
+				translate.HostNameAnnotation:              translate.Default.HostName(nil, vHostPathPod.Name, testingutil.DefaultTestCurrentNamespace).Name,
 				podtranslate.ServiceAccountNameAnnotation: "",
 				podtranslate.UIDAnnotation:                string(vHostPathPod.UID),
 			},

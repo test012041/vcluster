@@ -28,7 +28,7 @@ func TestPodAffinityTermsTranslation(t *testing.T) {
 	}
 	basicSelectorTranslatedWithMarker := &metav1.LabelSelector{MatchLabels: map[string]string{}}
 	for k, v := range basicSelector.MatchLabels {
-		basicSelectorTranslatedWithMarker.MatchLabels[translate.Default.HostLabel(nil, k, "")] = v
+		basicSelectorTranslatedWithMarker.MatchLabels[translate.HostLabel(k)] = v
 	}
 	basicSelectorTranslatedWithMarker.MatchLabels[translate.MarkerLabel] = translate.VClusterName
 
@@ -148,7 +148,7 @@ func TestPodAffinityTermsTranslation(t *testing.T) {
 			log:           loghelper.New("pods-syncer-translator-test"),
 		}
 
-		result := tr.translatePodAffinityTerm(nil, pod, testCase.term)
+		result := tr.translatePodAffinityTerm(pod, testCase.term)
 		assert.Assert(t, cmp.DeepEqual(result, testCase.expectedTerm), "Unexpected translation of the PodAffinityTerm in the '%s' test case", testCase.name)
 
 		// read the events from the recorder mock
@@ -199,7 +199,7 @@ func TestVolumeTranslation(t *testing.T) {
 					Name: "eph-vol",
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: translate.Default.HostName(nil, "pod-name-eph-vol", "test-ns"),
+							ClaimName: translate.Default.HostName(nil, "pod-name-eph-vol", "test-ns").Name,
 						},
 						Ephemeral: nil,
 					},
@@ -213,7 +213,7 @@ func TestVolumeTranslation(t *testing.T) {
 			fakeRecorder := record.NewFakeRecorder(10)
 			pClient := testingutil.NewFakeClient(scheme.Scheme)
 			vClient := testingutil.NewFakeClient(scheme.Scheme)
-			registerCtx := generictesting.NewFakeRegisterContext(generictesting.NewFakeConfig(), pClient, vClient)
+			registerCtx := generictesting.NewFakeRegisterContext(testingutil.NewFakeConfig(), pClient, vClient)
 			tr := &translator{
 				eventRecorder: fakeRecorder,
 				log:           loghelper.New("pods-syncer-translator-test"),

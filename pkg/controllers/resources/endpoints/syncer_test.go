@@ -48,19 +48,21 @@ func TestExistingEndpoints(t *testing.T) {
 	}
 	pEndpoints := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      translate.Default.HostName(nil, vEndpoints.Name, vEndpoints.Namespace),
+			Name:      translate.Default.HostName(nil, vEndpoints.Name, vEndpoints.Namespace).Name,
 			Namespace: "test",
 		},
 	}
 	pService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      translate.Default.HostName(nil, vEndpoints.Name, vEndpoints.Namespace),
+			Name:      translate.Default.HostName(nil, vEndpoints.Name, vEndpoints.Namespace).Name,
 			Namespace: "test",
 			Annotations: map[string]string{
-				translate.NameAnnotation:      vEndpoints.Name,
-				translate.NamespaceAnnotation: vEndpoints.Namespace,
-				translate.UIDAnnotation:       "",
-				translate.KindAnnotation:      corev1.SchemeGroupVersion.WithKind("Service").String(),
+				translate.NameAnnotation:          vEndpoints.Name,
+				translate.NamespaceAnnotation:     vEndpoints.Namespace,
+				translate.UIDAnnotation:           "",
+				translate.KindAnnotation:          corev1.SchemeGroupVersion.WithKind("Service").String(),
+				translate.HostNamespaceAnnotation: "test",
+				translate.HostNameAnnotation:      translate.Default.HostName(nil, vEndpoints.Name, vEndpoints.Namespace).Name,
 			},
 			Labels: map[string]string{
 				translate.NamespaceLabel: vEndpoints.Namespace,
@@ -69,13 +71,15 @@ func TestExistingEndpoints(t *testing.T) {
 	}
 	expectedEndpoints := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      translate.Default.HostName(nil, vEndpoints.Name, vEndpoints.Namespace),
+			Name:      translate.Default.HostName(nil, vEndpoints.Name, vEndpoints.Namespace).Name,
 			Namespace: "test",
 			Annotations: map[string]string{
-				translate.NameAnnotation:      vEndpoints.Name,
-				translate.NamespaceAnnotation: vEndpoints.Namespace,
-				translate.UIDAnnotation:       "",
-				translate.KindAnnotation:      corev1.SchemeGroupVersion.WithKind("Endpoints").String(),
+				translate.NameAnnotation:          vEndpoints.Name,
+				translate.NamespaceAnnotation:     vEndpoints.Namespace,
+				translate.UIDAnnotation:           "",
+				translate.KindAnnotation:          corev1.SchemeGroupVersion.WithKind("Endpoints").String(),
+				translate.HostNamespaceAnnotation: "test",
+				translate.HostNameAnnotation:      translate.Default.HostName(nil, vEndpoints.Name, vEndpoints.Namespace).Name,
 			},
 			Labels: map[string]string{
 				translate.NamespaceLabel: vEndpoints.Namespace,
@@ -148,13 +152,15 @@ func TestSync(t *testing.T) {
 	}
 	syncedEndpoints := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      translate.Default.HostName(nil, baseEndpoints.Name, baseEndpoints.Namespace),
+			Name:      translate.Default.HostName(nil, baseEndpoints.Name, baseEndpoints.Namespace).Name,
 			Namespace: "test",
 			Annotations: map[string]string{
-				translate.NameAnnotation:      baseEndpoints.Name,
-				translate.NamespaceAnnotation: baseEndpoints.Namespace,
-				translate.UIDAnnotation:       "",
-				translate.KindAnnotation:      corev1.SchemeGroupVersion.WithKind("Endpoints").String(),
+				translate.NameAnnotation:          baseEndpoints.Name,
+				translate.NamespaceAnnotation:     baseEndpoints.Namespace,
+				translate.UIDAnnotation:           "",
+				translate.KindAnnotation:          corev1.SchemeGroupVersion.WithKind("Endpoints").String(),
+				translate.HostNamespaceAnnotation: "test",
+				translate.HostNameAnnotation:      translate.Default.HostName(nil, baseEndpoints.Name, baseEndpoints.Namespace).Name,
 			},
 			Labels: map[string]string{
 				translate.NamespaceLabel: baseEndpoints.Namespace,

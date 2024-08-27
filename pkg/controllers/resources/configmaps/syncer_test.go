@@ -28,13 +28,15 @@ func TestSync(t *testing.T) {
 	}
 	syncedConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      translate.Default.HostName(nil, baseConfigMap.Name, baseConfigMap.Namespace),
+			Name:      translate.Default.HostName(nil, baseConfigMap.Name, baseConfigMap.Namespace).Name,
 			Namespace: "test",
 			Annotations: map[string]string{
-				translate.NameAnnotation:      baseConfigMap.Name,
-				translate.NamespaceAnnotation: baseConfigMap.Namespace,
-				translate.UIDAnnotation:       "",
-				translate.KindAnnotation:      corev1.SchemeGroupVersion.WithKind("ConfigMap").String(),
+				translate.NameAnnotation:          baseConfigMap.Name,
+				translate.NamespaceAnnotation:     baseConfigMap.Namespace,
+				translate.UIDAnnotation:           "",
+				translate.KindAnnotation:          corev1.SchemeGroupVersion.WithKind("ConfigMap").String(),
+				translate.HostNamespaceAnnotation: "test",
+				translate.HostNameAnnotation:      translate.Default.HostName(nil, baseConfigMap.Name, baseConfigMap.Namespace).Name,
 			},
 			Labels: map[string]string{
 				translate.NamespaceLabel: baseConfigMap.Namespace,

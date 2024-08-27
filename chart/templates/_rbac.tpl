@@ -24,14 +24,18 @@
     .Values.experimental.isolatedControlPlane.enabled
     .Values.sync.toHost.persistentVolumes.enabled
     .Values.sync.toHost.priorityClasses.enabled
+    .Values.sync.fromHost.priorityClasses.enabled
     .Values.sync.toHost.volumeSnapshots.enabled
     .Values.controlPlane.advanced.virtualScheduler.enabled
     .Values.sync.fromHost.ingressClasses.enabled
+    .Values.sync.fromHost.runtimeClasses.enabled
     (eq (toString .Values.sync.fromHost.storageClasses.enabled) "true")
     (eq (toString .Values.sync.fromHost.csiNodes.enabled) "true")
     (eq (toString .Values.sync.fromHost.csiDrivers.enabled) "true")
     (eq (toString .Values.sync.fromHost.csiStorageCapacities.enabled) "true")
     .Values.sync.fromHost.nodes.enabled
+    .Values.sync.toHost.customResourceDefinitions
+    .Values.sync.fromHost.customResourceDefinitions
     .Values.integrations.kubeVirt.enabled
     (and .Values.integrations.metricsServer.enabled .Values.integrations.metricsServer.nodes)
     .Values.experimental.multiNamespaceMode.enabled -}}
@@ -115,6 +119,36 @@
 {{- if .Values.experimental.genericSync.role.extraRules }}
 {{- range $ruleIndex, $rule := .Values.experimental.genericSync.role.extraRules }}
 - {{ toJson $rule }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+  Role rules defined in generic syncer
+*/}}
+{{- define "vcluster.customResourceDefinitions.roleExtraRules" -}}
+{{- if .Values.sync.toHost.customResourceDefinitions }}
+{{- range $crdName, $rule := .Values.sync.toHost.customResourceDefinitions }}
+{{- if $rule.enabled }}
+- resources: [ "{{ (splitn "." 2 $crdName)._0 }}" ]
+  apiGroups: [ "{{ (splitn "." 2 $crdName)._1 }}" ]
+  verbs: ["create", "delete", "patch", "update", "get", "list", "watch"]
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+  Cluster role rules defined in generic syncer
+*/}}
+{{- define "vcluster.customResourceDefinitions.clusterRoleExtraRules" -}}
+{{- if .Values.sync.fromHost.customResourceDefinitions }}
+{{- range $crdName, $rule := .Values.sync.fromHost.customResourceDefinitions }}
+{{- if $rule.enabled }}
+- resources: [ "{{ (splitn "." 2 $crdName)._0 }}" ]
+  apiGroups: [ "{{ (splitn "." 2 $crdName)._1 }}" ]
+  verbs: ["get", "list", "watch"]
 {{- end }}
 {{- end }}
 {{- end }}

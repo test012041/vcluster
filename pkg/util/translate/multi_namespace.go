@@ -9,6 +9,7 @@ import (
 	"github.com/loft-sh/vcluster/pkg/scheme"
 	"github.com/loft-sh/vcluster/pkg/syncer/synccontext"
 	"github.com/loft-sh/vcluster/pkg/util/translate/pro"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
@@ -30,13 +31,16 @@ func (s *multiNamespace) SingleNamespaceTarget() bool {
 }
 
 // HostName returns the physical name of the name / namespace resource
-func (s *multiNamespace) HostName(_ *synccontext.SyncContext, name, _ string) string {
-	return name
+func (s *multiNamespace) HostName(ctx *synccontext.SyncContext, name, namespace string) types.NamespacedName {
+	return types.NamespacedName{
+		Name:      name,
+		Namespace: s.HostNamespace(ctx, namespace),
+	}
 }
 
 // HostNameShort returns the short physical name of the name / namespace resource
-func (s *multiNamespace) HostNameShort(_ *synccontext.SyncContext, name, _ string) string {
-	return name
+func (s *multiNamespace) HostNameShort(ctx *synccontext.SyncContext, name, namespace string) types.NamespacedName {
+	return s.HostName(ctx, name, namespace)
 }
 
 func (s *multiNamespace) HostNameCluster(name string) string {
@@ -65,7 +69,23 @@ func (s *multiNamespace) IsManaged(ctx *synccontext.SyncContext, pObj client.Obj
 		}
 	}
 
+	// check if host name / namespace matches actual name / namespace
+	if pObj.GetAnnotations()[HostNameAnnotation] != "" && pObj.GetAnnotations()[HostNameAnnotation] != pObj.GetName() {
+		return false
+	} else if pObj.GetAnnotations()[HostNamespaceAnnotation] != "" && pObj.GetAnnotations()[HostNamespaceAnnotation] != pObj.GetNamespace() {
+		return false
+	}
+
 	return true
+}
+
+func (s *multiNamespace) LabelsToTranslate() map[string]bool {
+	return map[string]bool{
+		// namespace, marker & controlled-by
+		NamespaceLabel:  true,
+		MarkerLabel:     true,
+		ControllerLabel: true,
+	}
 }
 
 func (s *multiNamespace) IsTargetedNamespace(ctx *synccontext.SyncContext, pNamespace string) bool {
@@ -81,6 +101,10 @@ func (s *multiNamespace) getNamespacePrefix() string {
 }
 
 func (s *multiNamespace) HostNamespace(ctx *synccontext.SyncContext, vNamespace string) string {
+	if vNamespace == "" {
+		return ""
+	}
+
 	if pNamespace, ok := pro.VirtualNamespaceMatchesMapping(ctx, vNamespace); ok {
 		return pNamespace
 	}
@@ -100,51 +124,4 @@ func getNamespaceSuffix(currentNamespace, suffix string) string {
 
 func (s *multiNamespace) MarkerLabelCluster() string {
 	return SafeConcatName(s.currentNamespace, "x", VClusterName)
-}
-
-func (s *multiNamespace) VirtualLabelCluster(ctx *synccontext.SyncContext, pLabel string) (retLabel string, found bool) {
-	if keyMatchesSyncedLabels(ctx, pLabel) {
-		return pLabel, true
-	} else if !strings.HasPrefix(pLabel, LabelPrefix) {
-		return pLabel, true
-	}
-
-	defer func() {
-		recordLabelCluster(ctx, retLabel, pLabel)
-	}()
-
-	// check if the label is within the store
-	if ctx != nil && ctx.Mappings != nil && ctx.Mappings.Store() != nil {
-		vLabel, ok := ctx.Mappings.Store().HostToVirtualLabelCluster(ctx, pLabel)
-		if ok {
-			return vLabel, true
-		}
-	}
-
-	return "", false
-}
-
-func (s *multiNamespace) HostLabelCluster(ctx *synccontext.SyncContext, key string) (retLabel string) {
-	if keyMatchesSyncedLabels(ctx, key) {
-		return key
-	}
-
-	defer func() {
-		recordLabelCluster(ctx, key, retLabel)
-	}()
-
-	return hostLabelCluster(key, s.currentNamespace)
-}
-
-func (s *multiNamespace) VirtualLabel(_ *synccontext.SyncContext, pLabel, _ string) (string, bool) {
-	return pLabel, true
-}
-
-func (s *multiNamespace) HostLabel(_ *synccontext.SyncContext, vLabel, _ string) string {
-	return vLabel
-}
-
-func hostLabelCluster(key, vClusterNamespace string) string {
-	digest := sha256.Sum256([]byte(key))
-	return SafeConcatName(LabelPrefix, vClusterNamespace, "x", VClusterName, "x", hex.EncodeToString(digest[0:])[0:10])
 }

@@ -102,7 +102,7 @@ type createHelm struct {
 	localCluster     bool
 }
 
-func CreateHelm(ctx context.Context, options *CreateOptions, globalFlags *flags.GlobalFlags, vClusterName string, log log.Logger) error {
+func CreateHelm(ctx context.Context, options *CreateOptions, globalFlags *flags.GlobalFlags, vClusterName string, log log.Logger, reuseNamespace bool) error {
 	cmd := &createHelm{
 		GlobalFlags:   globalFlags,
 		CreateOptions: options,
@@ -129,6 +129,18 @@ func CreateHelm(ctx context.Context, options *CreateOptions, globalFlags *flags.
 	err = clihelper.CheckHelmVersion(string(output))
 	if err != nil {
 		return err
+	}
+	vclusters, err := find.ListVClusters(ctx, cmd.Context, "", cmd.Namespace, log)
+	if err != nil {
+		return err
+	}
+
+	if !reuseNamespace {
+		for _, v := range vclusters {
+			if v.Namespace == cmd.Namespace && v.Name != vClusterName {
+				return fmt.Errorf("there is already a virtual cluster in namespace %s", cmd.Namespace)
+			}
+		}
 	}
 
 	err = cmd.prepare(ctx, vClusterName)
@@ -280,8 +292,9 @@ func CreateHelm(ctx context.Context, options *CreateOptions, globalFlags *flags.
 	if err != nil {
 		return err
 	}
-
+	verb := "created"
 	if isVClusterDeployed(release) {
+		verb = "upgraded"
 		// While certain backing store changes are allowed we prohibit changes to another distro.
 		if err := config.ValidateChanges(currentVClusterConfig, vClusterConfig); err != nil {
 			return err
@@ -304,7 +317,7 @@ func CreateHelm(ctx context.Context, options *CreateOptions, globalFlags *flags.
 
 	// check if we should connect to the vcluster or print the kubeconfig
 	if cmd.Connect || cmd.Print {
-		cmd.log.Donef("Successfully created virtual cluster %s in namespace %s", vClusterName, cmd.Namespace)
+		cmd.log.Donef("Successfully %s virtual cluster %s in namespace %s", verb, vClusterName, cmd.Namespace)
 		return ConnectHelm(ctx, &ConnectOptions{
 			BackgroundProxy:       cmd.BackgroundProxy,
 			UpdateCurrent:         cmd.UpdateCurrent,
@@ -315,9 +328,18 @@ func CreateHelm(ctx context.Context, options *CreateOptions, globalFlags *flags.
 	}
 
 	if cmd.localCluster {
-		cmd.log.Donef("Successfully created virtual cluster %s in namespace %s. \n- Use 'vcluster connect %s --namespace %s' to access the virtual cluster", vClusterName, cmd.Namespace, vClusterName, cmd.Namespace)
+		cmd.log.Donef(
+			"Successfully %s virtual cluster %s in namespace %s. \n"+
+				"- Use 'vcluster connect %s --namespace %s' to access the virtual cluster",
+			verb, vClusterName, cmd.Namespace, vClusterName, cmd.Namespace,
+		)
 	} else {
-		cmd.log.Donef("Successfully created virtual cluster %s in namespace %s. \n- Use 'vcluster connect %s --namespace %s' to access the virtual cluster\n- Use `vcluster connect %s --namespace %s -- kubectl get ns` to run a command directly within the vcluster", vClusterName, cmd.Namespace, vClusterName, cmd.Namespace, vClusterName, cmd.Namespace)
+		cmd.log.Donef(
+			"Successfully %s virtual cluster %s in namespace %s. \n"+
+				"- Use 'vcluster connect %s --namespace %s' to access the virtual cluster\n"+
+				"- Use `vcluster connect %s --namespace %s -- kubectl get ns` to run a command directly within the vcluster",
+			verb, vClusterName, cmd.Namespace, vClusterName, cmd.Namespace, vClusterName, cmd.Namespace,
+		)
 	}
 
 	return nil
@@ -370,7 +392,7 @@ func (cmd *createHelm) addVCluster(ctx context.Context, vClusterConfig *config.C
 		return nil
 	}
 
-	err = platform.ApplyPlatformSecret(ctx, cmd.LoadedConfig(cmd.log), cmd.kubeClient, "", cmd.Namespace, cmd.Project, "", "", false)
+	err = platform.ApplyPlatformSecret(ctx, cmd.LoadedConfig(cmd.log), cmd.kubeClient, "", cmd.Namespace, cmd.Project, "", "", false, cmd.LoadedConfig(cmd.log).Platform.CertificateAuthorityData)
 	if err != nil {
 		return fmt.Errorf("apply platform secret: %w", err)
 	}
@@ -541,10 +563,9 @@ func (cmd *createHelm) ToChartOptions(kubernetesVersion *version.Info, log log.L
 
 	cfg := cmd.LoadedConfig(log)
 	return &config.ExtraValuesOptions{
-		Distro:    cmd.Distro,
-		Expose:    cmd.Expose,
-		SyncNodes: cmd.localCluster,
-		NodePort:  cmd.localCluster,
+		Distro:   cmd.Distro,
+		Expose:   cmd.Expose,
+		NodePort: cmd.localCluster,
 		KubernetesVersion: config.KubernetesVersion{
 			Major: kubernetesVersion.Major,
 			Minor: kubernetesVersion.Minor,

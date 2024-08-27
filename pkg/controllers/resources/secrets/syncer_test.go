@@ -40,13 +40,15 @@ func TestSync(t *testing.T) {
 	}
 	syncedSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      translate.Default.HostName(nil, baseSecret.Name, baseSecret.Namespace),
+			Name:      translate.Default.HostName(nil, baseSecret.Name, baseSecret.Namespace).Name,
 			Namespace: "test",
 			Annotations: map[string]string{
-				translate.NameAnnotation:      baseSecret.Name,
-				translate.NamespaceAnnotation: baseSecret.Namespace,
-				translate.UIDAnnotation:       "",
-				translate.KindAnnotation:      corev1.SchemeGroupVersion.WithKind("Secret").String(),
+				translate.NameAnnotation:          baseSecret.Name,
+				translate.NamespaceAnnotation:     baseSecret.Namespace,
+				translate.UIDAnnotation:           "",
+				translate.KindAnnotation:          corev1.SchemeGroupVersion.WithKind("Secret").String(),
+				translate.HostNamespaceAnnotation: "test",
+				translate.HostNameAnnotation:      translate.Default.HostName(nil, baseSecret.Name, baseSecret.Namespace).Name,
 			},
 			Labels: map[string]string{
 				translate.NamespaceLabel: baseSecret.Namespace,
@@ -104,7 +106,6 @@ func TestSync(t *testing.T) {
 				},
 			},
 			Sync: func(ctx *synccontext.RegisterContext) {
-				ctx.Config.Experimental.SyncSettings.SyncLabels = []string{testLabel}
 				syncContext, syncer := newFakeSyncer(t, ctx)
 				_, err := syncer.(*secretSyncer).SyncToHost(syncContext, synccontext.NewSyncToHostEvent(baseSecret))
 				assert.NilError(t, err)
@@ -125,7 +126,6 @@ func TestSync(t *testing.T) {
 				},
 			},
 			Sync: func(ctx *synccontext.RegisterContext) {
-				ctx.Config.Experimental.SyncSettings.SyncLabels = []string{testLabel}
 				syncContext, syncer := newFakeSyncer(t, ctx)
 				_, err := syncer.(*secretSyncer).Sync(syncContext, synccontext.NewSyncEvent(syncedSecret, updatedSecret))
 				assert.NilError(t, err)

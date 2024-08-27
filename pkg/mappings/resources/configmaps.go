@@ -14,7 +14,7 @@ import (
 )
 
 func CreateConfigMapsMapper(ctx *synccontext.RegisterContext) (synccontext.Mapper, error) {
-	mapper, err := generic.NewMapperWithoutRecorder(ctx, &corev1.ConfigMap{}, func(ctx *synccontext.SyncContext, vName, vNamespace string, _ client.Object) string {
+	mapper, err := generic.NewMapperWithoutRecorder(ctx, &corev1.ConfigMap{}, func(ctx *synccontext.SyncContext, vName, vNamespace string, _ client.Object) types.NamespacedName {
 		return translate.Default.HostName(ctx, vName, vNamespace)
 	})
 	if err != nil {
@@ -86,7 +86,7 @@ func (s *configMapsMapper) Migrate(ctx *synccontext.RegisterContext, mapper sync
 		for _, configMap := range configMapsFromPod(item) {
 			pName := mapper.VirtualToHost(ctx.ToSyncContext("migrate-pod"), configMap, nil)
 			if pName.Name != "" {
-				err = ctx.Mappings.Store().RecordAndSaveReference(ctx, synccontext.NameMapping{
+				err = ctx.Mappings.Store().AddReferenceAndSave(ctx, synccontext.NameMapping{
 					GroupVersionKind: mappings.ConfigMaps(),
 					VirtualName:      configMap,
 					HostName:         pName,

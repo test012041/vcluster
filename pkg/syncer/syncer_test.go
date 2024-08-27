@@ -55,7 +55,7 @@ func (s *mockSyncer) Syncer() syncertypes.Sync[client.Object] {
 
 // SyncToHost is called when a virtual object was created and needs to be synced down to the physical cluster
 func (s *mockSyncer) SyncToHost(ctx *synccontext.SyncContext, event *synccontext.SyncToHostEvent[*corev1.Secret]) (ctrl.Result, error) {
-	pObj := translate.HostMetadata(ctx, event.Virtual, s.VirtualToHost(ctx, types.NamespacedName{Name: event.Virtual.GetName(), Namespace: event.Virtual.GetNamespace()}, event.Virtual))
+	pObj := translate.HostMetadata(event.Virtual, s.VirtualToHost(ctx, types.NamespacedName{Name: event.Virtual.GetName(), Namespace: event.Virtual.GetNamespace()}, event.Virtual))
 	if pObj == nil {
 		return ctrl.Result{}, errors.New("naive translate create failed")
 	}
@@ -76,7 +76,7 @@ func (s *mockSyncer) Sync(ctx *synccontext.SyncContext, event *synccontext.SyncE
 	}()
 
 	event.Host.Annotations = translate.HostAnnotations(event.Virtual, event.Host)
-	event.Host.Labels = translate.HostLabels(ctx, event.Virtual, event.Host)
+	event.Host.Labels = translate.HostLabels(event.Virtual, event.Host)
 
 	// check data
 	event.TargetObject().Data = event.SourceObject().Data
@@ -121,7 +121,7 @@ func (f *fakeSource) Start(_ context.Context, queue workqueue.RateLimitingInterf
 }
 
 func TestController(t *testing.T) {
-	translator := translate.NewSingleNamespaceTranslator(syncertesting.DefaultTestTargetNamespace)
+	translator := translate.NewSingleNamespaceTranslator(testingutil.DefaultTestTargetNamespace)
 
 	type testCase struct {
 		Name string
@@ -161,7 +161,7 @@ func TestController(t *testing.T) {
 				&corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "a",
-						Namespace: syncertesting.DefaultTestTargetNamespace,
+						Namespace: testingutil.DefaultTestTargetNamespace,
 						UID:       "123",
 					},
 				},
@@ -186,19 +186,21 @@ func TestController(t *testing.T) {
 					&corev1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "a",
-							Namespace: syncertesting.DefaultTestTargetNamespace,
+							Namespace: testingutil.DefaultTestTargetNamespace,
 							UID:       "123",
 						},
 					},
 					&corev1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      translator.HostName(nil, "a", namespaceInVClusterA),
-							Namespace: syncertesting.DefaultTestTargetNamespace,
+							Name:      translator.HostName(nil, "a", namespaceInVClusterA).Name,
+							Namespace: testingutil.DefaultTestTargetNamespace,
 							Annotations: map[string]string{
-								translate.NameAnnotation:      "a",
-								translate.NamespaceAnnotation: namespaceInVClusterA,
-								translate.UIDAnnotation:       "123",
-								translate.KindAnnotation:      corev1.SchemeGroupVersion.WithKind("Secret").String(),
+								translate.NameAnnotation:          "a",
+								translate.NamespaceAnnotation:     namespaceInVClusterA,
+								translate.UIDAnnotation:           "123",
+								translate.KindAnnotation:          corev1.SchemeGroupVersion.WithKind("Secret").String(),
+								translate.HostNameAnnotation:      translator.HostName(nil, "a", namespaceInVClusterA).Name,
+								translate.HostNamespaceAnnotation: testingutil.DefaultTestTargetNamespace,
 							},
 							Labels: map[string]string{
 								translate.NamespaceLabel: namespaceInVClusterA,
@@ -218,7 +220,7 @@ func TestController(t *testing.T) {
 		pClient := testingutil.NewFakeClient(scheme.Scheme, tc.InitialPhysicalState...)
 		vClient := testingutil.NewFakeClient(scheme.Scheme, tc.InitialVirtualState...)
 
-		fakeContext := syncertesting.NewFakeRegisterContext(syncertesting.NewFakeConfig(), pClient, vClient)
+		fakeContext := syncertesting.NewFakeRegisterContext(testingutil.NewFakeConfig(), pClient, vClient)
 		syncer, err := NewMockSyncer(fakeContext)
 		assert.NilError(t, err)
 
@@ -268,7 +270,7 @@ func TestController(t *testing.T) {
 }
 
 func TestReconcile(t *testing.T) {
-	translator := translate.NewSingleNamespaceTranslator(syncertesting.DefaultTestTargetNamespace)
+	translator := translate.NewSingleNamespaceTranslator(testingutil.DefaultTestTargetNamespace)
 
 	type testCase struct {
 		Name  string
@@ -318,7 +320,7 @@ func TestReconcile(t *testing.T) {
 				&corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "a",
-						Namespace: syncertesting.DefaultTestTargetNamespace,
+						Namespace: testingutil.DefaultTestTargetNamespace,
 						UID:       "123",
 					},
 				},
@@ -343,19 +345,21 @@ func TestReconcile(t *testing.T) {
 					&corev1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "a",
-							Namespace: syncertesting.DefaultTestTargetNamespace,
+							Namespace: testingutil.DefaultTestTargetNamespace,
 							UID:       "123",
 						},
 					},
 					&corev1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      translator.HostName(nil, "a", namespaceInVClusterA),
-							Namespace: syncertesting.DefaultTestTargetNamespace,
+							Name:      translator.HostName(nil, "a", namespaceInVClusterA).Name,
+							Namespace: testingutil.DefaultTestTargetNamespace,
 							Annotations: map[string]string{
-								translate.NameAnnotation:      "a",
-								translate.NamespaceAnnotation: namespaceInVClusterA,
-								translate.UIDAnnotation:       "123",
-								translate.KindAnnotation:      corev1.SchemeGroupVersion.WithKind("Secret").String(),
+								translate.NameAnnotation:          "a",
+								translate.NamespaceAnnotation:     namespaceInVClusterA,
+								translate.UIDAnnotation:           "123",
+								translate.KindAnnotation:          corev1.SchemeGroupVersion.WithKind("Secret").String(),
+								translate.HostNamespaceAnnotation: testingutil.DefaultTestTargetNamespace,
+								translate.HostNameAnnotation:      translator.HostName(nil, "a", namespaceInVClusterA).Name,
 							},
 							Labels: map[string]string{
 								translate.NamespaceLabel: namespaceInVClusterA,
@@ -390,8 +394,8 @@ func TestReconcile(t *testing.T) {
 				// existing object doesn't have annotations/labels indicating it is owned, but has the name of the synced object
 				&corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      translator.HostName(nil, "a", namespaceInVClusterA),
-						Namespace: syncertesting.DefaultTestTargetNamespace,
+						Name:      translator.HostName(nil, "a", namespaceInVClusterA).Name,
+						Namespace: testingutil.DefaultTestTargetNamespace,
 						Annotations: map[string]string{
 							"app": "existing",
 						},
@@ -423,17 +427,18 @@ func TestReconcile(t *testing.T) {
 				corev1.SchemeGroupVersion.WithKind("Secret"): {
 					&corev1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      translator.HostName(nil, "a", namespaceInVClusterA),
-							Namespace: syncertesting.DefaultTestTargetNamespace,
+							Name:      translator.HostName(nil, "a", namespaceInVClusterA).Name,
+							Namespace: testingutil.DefaultTestTargetNamespace,
 							Annotations: map[string]string{
-								"app":                         "existing",
-								translate.NameAnnotation:      "a",
-								translate.NamespaceAnnotation: namespaceInVClusterA,
-								translate.UIDAnnotation:       "123",
-								translate.KindAnnotation:      corev1.SchemeGroupVersion.WithKind("Secret").String(),
+								"app":                             "existing",
+								translate.NameAnnotation:          "a",
+								translate.NamespaceAnnotation:     namespaceInVClusterA,
+								translate.UIDAnnotation:           "123",
+								translate.KindAnnotation:          corev1.SchemeGroupVersion.WithKind("Secret").String(),
+								translate.HostNameAnnotation:      translator.HostName(nil, "a", namespaceInVClusterA).Name,
+								translate.HostNamespaceAnnotation: testingutil.DefaultTestTargetNamespace,
 							},
 							Labels: map[string]string{
-								"app":                    "existing",
 								translate.NamespaceLabel: namespaceInVClusterA,
 							},
 						},
@@ -447,7 +452,7 @@ func TestReconcile(t *testing.T) {
 
 			EnqueueObjs: []types.NamespacedName{
 				toHostRequest(reconcile.Request{
-					NamespacedName: types.NamespacedName{Name: "abc", Namespace: syncertesting.DefaultTestTargetNamespace},
+					NamespacedName: types.NamespacedName{Name: "abc", Namespace: testingutil.DefaultTestTargetNamespace},
 				}).NamespacedName,
 			},
 
@@ -467,7 +472,7 @@ func TestReconcile(t *testing.T) {
 				&corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "abc",
-						Namespace: syncertesting.DefaultTestTargetNamespace,
+						Namespace: testingutil.DefaultTestTargetNamespace,
 						Annotations: map[string]string{
 							translate.NameAnnotation:      "abc",
 							translate.NamespaceAnnotation: namespaceInVClusterA,
@@ -501,7 +506,7 @@ func TestReconcile(t *testing.T) {
 					&corev1.Secret{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "abc",
-							Namespace: syncertesting.DefaultTestTargetNamespace,
+							Namespace: testingutil.DefaultTestTargetNamespace,
 							Annotations: map[string]string{
 								translate.NameAnnotation:      "abc",
 								translate.NamespaceAnnotation: namespaceInVClusterA,
@@ -543,7 +548,7 @@ func TestReconcile(t *testing.T) {
 		pClient := testingutil.NewFakeClient(scheme.Scheme, tc.InitialPhysicalState...)
 		vClient := testingutil.NewFakeClient(scheme.Scheme, tc.InitialVirtualState...)
 
-		fakeContext := syncertesting.NewFakeRegisterContext(syncertesting.NewFakeConfig(), pClient, vClient)
+		fakeContext := syncertesting.NewFakeRegisterContext(testingutil.NewFakeConfig(), pClient, vClient)
 		syncer, err := tc.Syncer(fakeContext)
 		assert.NilError(t, err)
 

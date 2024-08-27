@@ -56,14 +56,16 @@ func TestSync(t *testing.T) {
 	}
 
 	pObjectMeta := metav1.ObjectMeta{
-		Name:            translate.Default.HostName(nil, vObjectMeta.Name, vObjectMeta.Namespace),
+		Name:            translate.Default.HostName(nil, vObjectMeta.Name, vObjectMeta.Namespace).Name,
 		Namespace:       targetNamespace,
 		ResourceVersion: "1234",
 		Annotations: map[string]string{
-			translate.NameAnnotation:      vObjectMeta.Name,
-			translate.NamespaceAnnotation: vObjectMeta.Namespace,
-			translate.UIDAnnotation:       "",
-			translate.KindAnnotation:      volumesnapshotv1.SchemeGroupVersion.WithKind("VolumeSnapshot").String(),
+			translate.NameAnnotation:          vObjectMeta.Name,
+			translate.NamespaceAnnotation:     vObjectMeta.Namespace,
+			translate.UIDAnnotation:           "",
+			translate.KindAnnotation:          volumesnapshotv1.SchemeGroupVersion.WithKind("VolumeSnapshot").String(),
+			translate.HostNamespaceAnnotation: targetNamespace,
+			translate.HostNameAnnotation:      translate.Default.HostName(nil, vObjectMeta.Name, vObjectMeta.Namespace).Name,
 		},
 		Labels: map[string]string{
 			translate.MarkerLabel:    translate.VClusterName,
@@ -74,7 +76,7 @@ func TestSync(t *testing.T) {
 		ObjectMeta: pObjectMeta,
 		Spec: volumesnapshotv1.VolumeSnapshotSpec{
 			Source: volumesnapshotv1.VolumeSnapshotSource{
-				PersistentVolumeClaimName: ptr.To(translate.Default.HostName(nil, *vPVSourceSnapshot.Spec.Source.PersistentVolumeClaimName, vObjectMeta.Namespace)),
+				PersistentVolumeClaimName: ptr.To(translate.Default.HostName(nil, *vPVSourceSnapshot.Spec.Source.PersistentVolumeClaimName, vObjectMeta.Namespace).Name),
 			},
 			VolumeSnapshotClassName: vPVSourceSnapshot.Spec.VolumeSnapshotClassName,
 		},

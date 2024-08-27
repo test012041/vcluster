@@ -5,6 +5,7 @@ import (
 
 	"github.com/loft-sh/vcluster/pkg/syncer/synccontext"
 	syncertesting "github.com/loft-sh/vcluster/pkg/syncer/testing"
+	testingutil "github.com/loft-sh/vcluster/pkg/util/testing"
 	"gotest.tools/assert"
 
 	"github.com/loft-sh/vcluster/pkg/util/translate"
@@ -17,20 +18,22 @@ import (
 )
 
 func TestSync(t *testing.T) {
-	translate.Default = translate.NewSingleNamespaceTranslator(syncertesting.DefaultTestTargetNamespace)
+	translate.Default = translate.NewSingleNamespaceTranslator(testingutil.DefaultTestTargetNamespace)
 	vObjectMeta := metav1.ObjectMeta{
 		Name:            "testPDB",
 		Namespace:       "default",
 		ResourceVersion: syncertesting.FakeClientResourceVersion,
 	}
 	pObjectMeta := metav1.ObjectMeta{
-		Name:      translate.Default.HostName(nil, "testPDB", vObjectMeta.Namespace),
+		Name:      translate.Default.HostName(nil, "testPDB", vObjectMeta.Namespace).Name,
 		Namespace: "test",
 		Annotations: map[string]string{
-			translate.NameAnnotation:      vObjectMeta.Name,
-			translate.NamespaceAnnotation: vObjectMeta.Namespace,
-			translate.UIDAnnotation:       "",
-			translate.KindAnnotation:      policyv1.SchemeGroupVersion.WithKind("PodDisruptionBudget").String(),
+			translate.NameAnnotation:          vObjectMeta.Name,
+			translate.NamespaceAnnotation:     vObjectMeta.Namespace,
+			translate.UIDAnnotation:           "",
+			translate.KindAnnotation:          policyv1.SchemeGroupVersion.WithKind("PodDisruptionBudget").String(),
+			translate.HostNameAnnotation:      translate.Default.HostName(nil, "testPDB", vObjectMeta.Namespace).Name,
+			translate.HostNamespaceAnnotation: "test",
 		},
 		Labels: map[string]string{
 			translate.NamespaceLabel: vObjectMeta.Namespace,
@@ -75,7 +78,7 @@ func TestSync(t *testing.T) {
 		ObjectMeta: hostClusterSyncedPDB.ObjectMeta,
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			MaxUnavailable: vclusterUpdatedSelectorPDB.Spec.MaxUnavailable,
-			Selector:       translate.HostLabelSelector(nil, vclusterUpdatedSelectorPDB.Spec.Selector, ""),
+			Selector:       translate.HostLabelSelector(vclusterUpdatedSelectorPDB.Spec.Selector),
 		},
 	}
 

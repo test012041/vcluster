@@ -373,7 +373,7 @@ func (s *importer) VirtualToHost(ctx *synccontext.SyncContext, req types.Namespa
 		return s.virtualToHost(ctx, req, vObj)
 	}
 
-	return types.NamespacedName{Name: translate.Default.HostName(ctx, req.Name, req.Namespace), Namespace: translate.Default.HostNamespace(ctx, req.Namespace)}
+	return translate.Default.HostName(ctx, req.Name, req.Namespace)
 }
 
 func (s *importer) HostToVirtual(ctx *synccontext.SyncContext, req types.NamespacedName, pObj client.Object) types.NamespacedName {
@@ -426,6 +426,8 @@ func (s *importer) updateVirtualAnnotations(a map[string]string) map[string]stri
 	delete(a, translate.NamespaceAnnotation)
 	delete(a, translate.UIDAnnotation)
 	delete(a, translate.KindAnnotation)
+	delete(a, translate.HostNameAnnotation)
+	delete(a, translate.HostNamespaceAnnotation)
 	delete(a, corev1.LastAppliedConfigAnnotation)
 	return a
 }

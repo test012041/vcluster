@@ -52,7 +52,16 @@ func Register(ctx *synccontext.ControllerContext) error {
 		targetService := cmp.Or(ctx.Config.Integrations.MetricsServer.APIService.Service.Name, "metrics-server")
 		targetServiceNamespace := cmp.Or(ctx.Config.Integrations.MetricsServer.APIService.Service.Namespace, "kube-system")
 		targetServicePort := cmp.Or(ctx.Config.Integrations.MetricsServer.APIService.Service.Port, 443)
-		err := apiservice.StartAPIServiceProxy(ctx, targetService, targetServiceNamespace, targetServicePort, hostPort)
+		err := apiservice.StartAPIServiceProxy(
+			ctx,
+			targetService,
+			targetServiceNamespace,
+			targetServicePort,
+			hostPort,
+			func(h http.Handler) http.Handler {
+				return WithMetricsServerProxy(h, ctx.ToRegisterContext())
+			},
+		)
 		if err != nil {
 			return fmt.Errorf("start api service proxy: %w", err)
 		}
@@ -133,7 +142,7 @@ func handleMetricsServerProxyRequest(
 ) {
 	syncContext := ctx.ToSyncContext("metrics-proxy")
 	splitted := strings.Split(req.URL.Path, "/")
-	err := translateLabelSelectors(syncContext, req, info.Namespace)
+	err := translateLabelSelectors(req)
 	if err != nil {
 		klog.Infof("error translating label selectors %v", err)
 		requestpkg.FailWithStatus(w, req, http.StatusInternalServerError, err)
@@ -166,7 +175,7 @@ func handleMetricsServerProxyRequest(
 	if info.Resource == PodResource && info.Verb == RequestVerbList {
 		// check if its a list request across all namespaces
 		if info.Namespace != "" {
-			splitted[5] = translate.Default.HostNamespace(syncContext, info.Namespace)
+			splitted[5] = mappings.VirtualToHostNamespace(syncContext, info.Namespace)
 		} else if translate.Default.SingleNamespaceTarget() {
 			// limit to current namespace in host cluster
 			splitted = append(splitted[:4], append([]string{"namespaces", ctx.Config.WorkloadTargetNamespace}, splitted[4:]...)...)
@@ -472,7 +481,7 @@ func getVirtualNodes(ctx context.Context, vClient client.Client) ([]corev1.Node,
 	return nodeList.Items, nil
 }
 
-func translateLabelSelectors(ctx *synccontext.SyncContext, req *http.Request, namespace string) error {
+func translateLabelSelectors(req *http.Request) error {
 	translatedSelectors := make(map[string]string)
 
 	query := req.URL.Query()
@@ -484,7 +493,7 @@ func translateLabelSelectors(ctx *synccontext.SyncContext, req *http.Request, na
 		}
 
 		for k, v := range selectors {
-			translatedKey := translate.Default.HostLabel(ctx, k, namespace)
+			translatedKey := translate.HostLabel(k)
 			translatedSelectors[translatedKey] = v
 		}
 	}

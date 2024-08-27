@@ -17,7 +17,7 @@ import (
 )
 
 func TestSync(t *testing.T) {
-	translate.Default = translate.NewSingleNamespaceTranslator(syncertesting.DefaultTestTargetNamespace)
+	translate.Default = translate.NewSingleNamespaceTranslator(testingutil.DefaultTestTargetNamespace)
 
 	vObjectMeta := metav1.ObjectMeta{
 		Name:            "testsc",
@@ -35,9 +35,10 @@ func TestSync(t *testing.T) {
 				translate.MarkerLabel: translate.VClusterName,
 			},
 			Annotations: map[string]string{
-				translate.NameAnnotation: "testsc",
-				translate.UIDAnnotation:  "",
-				translate.KindAnnotation: storagev1.SchemeGroupVersion.WithKind("StorageClass").String(),
+				translate.NameAnnotation:     "testsc",
+				translate.UIDAnnotation:      "",
+				translate.KindAnnotation:     storagev1.SchemeGroupVersion.WithKind("StorageClass").String(),
+				translate.HostNameAnnotation: translate.Default.HostNameCluster(vObjectMeta.Name),
 			},
 		},
 		Provisioner: "my-provisioner",
@@ -56,9 +57,10 @@ func TestSync(t *testing.T) {
 				translate.MarkerLabel: translate.VClusterName,
 			},
 			Annotations: map[string]string{
-				translate.NameAnnotation: "testsc",
-				translate.UIDAnnotation:  "",
-				translate.KindAnnotation: storagev1.SchemeGroupVersion.WithKind("StorageClass").String(),
+				translate.NameAnnotation:     "testsc",
+				translate.UIDAnnotation:      "",
+				translate.KindAnnotation:     storagev1.SchemeGroupVersion.WithKind("StorageClass").String(),
+				translate.HostNameAnnotation: translate.Default.HostNameCluster(vObjectMeta.Name),
 			},
 		},
 		Provisioner: "my-provisioner",

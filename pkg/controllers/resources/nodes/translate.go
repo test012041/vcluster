@@ -16,12 +16,17 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var TaintsAnnotation = "vcluster.loft.sh/original-taints"
+var (
+	TaintsAnnotation                  = "vcluster.loft.sh/original-taints"
+	RancherAgentPodRequestsAnnotation = "management.cattle.io/pod-requests"
+	RancherAgentPodLimitsAnnotation   = "management.cattle.io/pod-limits"
+)
 
 func (s *nodeSyncer) translateUpdateBackwards(pNode *corev1.Node, vNode *corev1.Node) {
 	// merge labels & taints
 	translatedSpec := pNode.Spec.DeepCopy()
-	labels, annotations := translate.ApplyMetadata(pNode.Annotations, vNode.Annotations, pNode.Labels, vNode.Labels, TaintsAnnotation)
+	excludeAnnotations := []string{TaintsAnnotation, RancherAgentPodRequestsAnnotation, RancherAgentPodLimitsAnnotation}
+	labels, annotations := translate.ApplyMetadata(pNode.Annotations, vNode.Annotations, pNode.Labels, vNode.Labels, excludeAnnotations...)
 
 	// merge taints together
 	oldPhysical := []string{}
@@ -172,7 +177,13 @@ func (s *nodeSyncer) translateUpdateStatus(ctx *synccontext.SyncContext, pNode *
 				klog.Errorf("Error listing pods: %v", err)
 			} else {
 				for _, pod := range podList.Items {
-					if !translate.Default.IsManaged(ctx, &pod) {
+					isManaged, err := s.IsManaged(ctx, &pod)
+					if err != nil {
+						klog.FromContext(ctx).Error(err, "is pod managed")
+					}
+
+					// check if managed
+					if !isManaged {
 						// count pods that are not synced by this vcluster
 						nonVClusterPods++
 					}

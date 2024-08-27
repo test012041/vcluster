@@ -25,13 +25,15 @@ func TestSync(t *testing.T) {
 		Namespace: "testns",
 	}
 	pObjectMeta := metav1.ObjectMeta{
-		Name:      translate.Default.HostName(nil, "testservice", "testns"),
+		Name:      translate.Default.HostName(nil, "testservice", "testns").Name,
 		Namespace: "test",
 		Annotations: map[string]string{
-			translate.NameAnnotation:      vObjectMeta.Name,
-			translate.NamespaceAnnotation: vObjectMeta.Namespace,
-			translate.UIDAnnotation:       "",
-			translate.KindAnnotation:      corev1.SchemeGroupVersion.WithKind("Service").String(),
+			translate.NameAnnotation:          vObjectMeta.Name,
+			translate.NamespaceAnnotation:     vObjectMeta.Namespace,
+			translate.UIDAnnotation:           "",
+			translate.KindAnnotation:          corev1.SchemeGroupVersion.WithKind("Service").String(),
+			translate.HostNamespaceAnnotation: "test",
+			translate.HostNameAnnotation:      translate.Default.HostName(nil, "testservice", "testns").Name,
 		},
 		Labels: map[string]string{
 			translate.NamespaceLabel: vObjectMeta.Namespace,
@@ -88,6 +90,8 @@ func TestSync(t *testing.T) {
 				translate.NamespaceAnnotation:          vObjectMeta.Namespace,
 				translate.UIDAnnotation:                "",
 				translate.KindAnnotation:               corev1.SchemeGroupVersion.WithKind("Service").String(),
+				translate.HostNamespaceAnnotation:      pObjectMeta.Namespace,
+				translate.HostNameAnnotation:           pObjectMeta.Name,
 				translate.ManagedAnnotationsAnnotation: "a",
 				"a":                                    "b",
 			},
@@ -297,9 +301,9 @@ func TestSync(t *testing.T) {
 		ObjectMeta: pObjectMeta,
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
-				translate.Default.HostLabel(nil, selectorKey, ""): vServiceNodePortFromExternal.Spec.Selector[selectorKey],
-				translate.NamespaceLabel:                          vServiceNodePortFromExternal.Namespace,
-				translate.MarkerLabel:                             translate.VClusterName,
+				translate.HostLabel(selectorKey): vServiceNodePortFromExternal.Spec.Selector[selectorKey],
+				translate.NamespaceLabel:         vServiceNodePortFromExternal.Namespace,
+				translate.MarkerLabel:            translate.VClusterName,
 			},
 			Type:  corev1.ServiceTypeNodePort,
 			Ports: vServiceNodePortFromExternal.Spec.Ports,

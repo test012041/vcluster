@@ -49,20 +49,23 @@ type MappingsStore interface {
 	// HasVirtualObject checks if the store has a mapping for the virtual object
 	HasVirtualObject(ctx context.Context, pObj Object) bool
 
-	// RecordAndSaveReference records a reference mapping and directly saves it
-	RecordAndSaveReference(ctx context.Context, nameMapping, belongsTo NameMapping) error
+	// AddReferenceAndSave adds a reference mapping and directly saves the mapping
+	AddReferenceAndSave(ctx context.Context, nameMapping, belongsTo NameMapping) error
 
-	// RecordReference records a reference mapping
-	RecordReference(ctx context.Context, nameMapping, belongsTo NameMapping) error
+	// DeleteReferenceAndSave deletes a reference mapping and directly saves the mapping
+	DeleteReferenceAndSave(ctx context.Context, nameMapping, belongsTo NameMapping) error
 
-	// RecordLabel records a label mapping in the store
-	RecordLabel(ctx context.Context, labelMapping LabelMapping, belongsTo NameMapping) error
+	// AddReference adds a reference mapping
+	AddReference(ctx context.Context, nameMapping, belongsTo NameMapping) error
 
-	// RecordLabelCluster records a label mapping for a cluster scoped object in the store
-	RecordLabelCluster(ctx context.Context, labelMapping LabelMapping, belongsTo NameMapping) error
+	// DeleteReference deletes a reference mapping
+	DeleteReference(ctx context.Context, nameMapping, belongsTo NameMapping) error
 
 	// SaveMapping saves the mapping in the backing store
 	SaveMapping(ctx context.Context, mapping NameMapping) error
+
+	// DeleteMapping deletes the mapping in the backing store
+	DeleteMapping(ctx context.Context, mapping NameMapping) error
 
 	// ReferencesTo retrieves all known references to this object
 	ReferencesTo(ctx context.Context, vObj Object) []NameMapping
@@ -72,12 +75,6 @@ type MappingsStore interface {
 
 	// VirtualToHostName maps the given virtual object to the host name if found within the store
 	VirtualToHostName(ctx context.Context, vObj Object) (types.NamespacedName, bool)
-
-	// HostToVirtualLabel maps the given host label to the virtual label if found within the store
-	HostToVirtualLabel(ctx context.Context, pLabel string) (string, bool)
-
-	// HostToVirtualLabelCluster maps the given host label to the virtual label if found within the store
-	HostToVirtualLabelCluster(ctx context.Context, pLabel string) (string, bool)
 }
 
 // Mapper holds the mapping logic for an object
@@ -104,6 +101,22 @@ type Mapper interface {
 type Object struct {
 	schema.GroupVersionKind
 	types.NamespacedName
+}
+
+func (o Object) WithVirtualName(vName types.NamespacedName) NameMapping {
+	return NameMapping{
+		GroupVersionKind: o.GroupVersionKind,
+		VirtualName:      vName,
+		HostName:         o.NamespacedName,
+	}
+}
+
+func (o Object) WithHostName(pName types.NamespacedName) NameMapping {
+	return NameMapping{
+		GroupVersionKind: o.GroupVersionKind,
+		VirtualName:      o.NamespacedName,
+		HostName:         pName,
+	}
 }
 
 func (o Object) Equals(other Object) bool {
@@ -194,21 +207,5 @@ func (n NameMapping) String() string {
 		n.GroupVersionKind.String(),
 		n.VirtualName.String(),
 		n.HostName.String(),
-	}, ";")
-}
-
-type LabelMapping struct {
-	Virtual string
-	Host    string
-}
-
-func (l LabelMapping) Equals(other LabelMapping) bool {
-	return l.Host == other.Host && l.Virtual == other.Virtual
-}
-
-func (l LabelMapping) String() string {
-	return strings.Join([]string{
-		l.Virtual,
-		l.Host,
 	}, ";")
 }

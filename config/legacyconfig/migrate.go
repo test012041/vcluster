@@ -385,14 +385,14 @@ func convertBaseValues(oldConfig BaseHelm, newConfig *config.Config) error {
 			newConfig.Policies.NetworkPolicy.Enabled = true
 		}
 		if oldConfig.Isolation.ResourceQuota.Enabled != nil {
-			newConfig.Policies.ResourceQuota.Enabled = *oldConfig.Isolation.ResourceQuota.Enabled
+			newConfig.Policies.ResourceQuota.Enabled = config.StrBool(strconv.FormatBool(*oldConfig.Isolation.ResourceQuota.Enabled))
 		} else {
-			newConfig.Policies.ResourceQuota.Enabled = true
+			newConfig.Policies.ResourceQuota.Enabled = "true"
 		}
 		if oldConfig.Isolation.LimitRange.Enabled != nil {
-			newConfig.Policies.LimitRange.Enabled = *oldConfig.Isolation.LimitRange.Enabled
+			newConfig.Policies.LimitRange.Enabled = config.StrBool(strconv.FormatBool(*oldConfig.Isolation.LimitRange.Enabled))
 		} else {
-			newConfig.Policies.LimitRange.Enabled = true
+			newConfig.Policies.LimitRange.Enabled = "true"
 		}
 		if oldConfig.Isolation.PodSecurityStandard == "" {
 			newConfig.Policies.PodSecurityStandard = "baseline"
@@ -978,11 +978,6 @@ func migrateFlag(key, value string, newConfig *config.Config) error {
 		return fmt.Errorf("shouldn't be used directly, use isolation.podSecurityStandard instead")
 	case "plugins":
 		return fmt.Errorf("shouldn't be used directly")
-	case "sync-labels":
-		if value == "" {
-			return fmt.Errorf("value is missing")
-		}
-		newConfig.Experimental.SyncSettings.SyncLabels = append(newConfig.Experimental.SyncSettings.SyncLabels, strings.Split(value, ",")...)
 	case "map-virtual-service":
 		return fmt.Errorf("shouldn't be used directly")
 	case "map-host-service":

@@ -11,6 +11,7 @@ import (
 	"github.com/loft-sh/vcluster/pkg/util/base36"
 	"github.com/loft-sh/vcluster/pkg/util/translate/pro"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -32,26 +33,38 @@ func (s *singleNamespace) SingleNamespaceTarget() bool {
 	return true
 }
 
-func (s *singleNamespace) HostName(ctx *synccontext.SyncContext, vName, vNamespace string) string {
+func (s *singleNamespace) HostName(ctx *synccontext.SyncContext, vName, vNamespace string) types.NamespacedName {
 	if vName == "" {
-		return ""
-	} else if _, ok := pro.VirtualNamespaceMatchesMapping(ctx, vNamespace); ok {
-		return vName
+		return types.NamespacedName{}
+	} else if pNamespace, ok := pro.VirtualNamespaceMatchesMapping(ctx, vNamespace); ok {
+		return types.NamespacedName{
+			Name:      vName,
+			Namespace: pNamespace,
+		}
 	}
 
-	return SingleNamespaceHostName(vName, vNamespace, VClusterName)
+	return types.NamespacedName{
+		Name:      SingleNamespaceHostName(vName, vNamespace, VClusterName),
+		Namespace: s.HostNamespace(ctx, vNamespace),
+	}
 }
 
-func (s *singleNamespace) HostNameShort(ctx *synccontext.SyncContext, vName, vNamespace string) string {
+func (s *singleNamespace) HostNameShort(ctx *synccontext.SyncContext, vName, vNamespace string) types.NamespacedName {
 	if vName == "" {
-		return ""
-	} else if _, ok := pro.VirtualNamespaceMatchesMapping(ctx, vNamespace); ok {
-		return vName
+		return types.NamespacedName{}
+	} else if pNamespace, ok := pro.VirtualNamespaceMatchesMapping(ctx, vNamespace); ok {
+		return types.NamespacedName{
+			Name:      vName,
+			Namespace: pNamespace,
+		}
 	}
 
 	// we use base36 to avoid as much conflicts as possible
 	digest := sha256.Sum256([]byte(strings.Join([]string{vName, "x", vNamespace, "x", VClusterName}, "-")))
-	return base36.EncodeBytes(digest[:])[0:10]
+	return types.NamespacedName{
+		Name:      "v" + base36.EncodeBytes(digest[:])[0:13], // needs to start with a character for certain objects (e.g. services)
+		Namespace: s.HostNamespace(ctx, vNamespace),
+	}
 }
 
 func SingleNamespaceHostName(name, namespace, suffix string) string {
@@ -96,7 +109,7 @@ func (s *singleNamespace) IsManaged(ctx *synccontext.SyncContext, pObj client.Ob
 		// check if the name annotation is correct
 		if pObj.GetAnnotations()[NameAnnotation] == "" {
 			return false
-		} else if ctx.Mappings.Has(gvk) && pObj.GetName() != mappings.VirtualToHostName(ctx, pObj.GetAnnotations()[NameAnnotation], pObj.GetAnnotations()[NamespaceAnnotation], gvk) {
+		} else if ctx.Mappings != nil && ctx.Mappings.Has(gvk) && pObj.GetName() != mappings.VirtualToHostName(ctx, pObj.GetAnnotations()[NameAnnotation], pObj.GetAnnotations()[NamespaceAnnotation], gvk) {
 			klog.FromContext(ctx).V(1).Info("Host object doesn't match, because name annotations is wrong",
 				"object", pObj.GetName(),
 				"kind", gvk.String(),
@@ -119,6 +132,13 @@ func (s *singleNamespace) IsManaged(ctx *synccontext.SyncContext, pObj client.Ob
 		}
 	}
 
+	// check if host name / namespace matches actual name / namespace
+	if pObj.GetAnnotations()[HostNameAnnotation] != "" && pObj.GetAnnotations()[HostNameAnnotation] != pObj.GetName() {
+		return false
+	} else if pObj.GetAnnotations()[HostNamespaceAnnotation] != "" && pObj.GetAnnotations()[HostNamespaceAnnotation] != pObj.GetNamespace() {
+		return false
+	}
+
 	return true
 }
 
@@ -130,7 +150,23 @@ func (s *singleNamespace) IsTargetedNamespace(ctx *synccontext.SyncContext, pNam
 	return pNamespace == s.targetNamespace
 }
 
+func (s *singleNamespace) LabelsToTranslate() map[string]bool {
+	return map[string]bool{
+		// rewrite release
+		VClusterReleaseLabel: true,
+
+		// namespace, marker & controlled-by
+		NamespaceLabel:  true,
+		MarkerLabel:     true,
+		ControllerLabel: true,
+	}
+}
+
 func (s *singleNamespace) HostNamespace(ctx *synccontext.SyncContext, vNamespace string) string {
+	if vNamespace == "" {
+		return ""
+	}
+
 	if pNamespace, ok := pro.VirtualNamespaceMatchesMapping(ctx, vNamespace); ok {
 		return pNamespace
 	}
@@ -138,137 +174,12 @@ func (s *singleNamespace) HostNamespace(ctx *synccontext.SyncContext, vNamespace
 	return s.targetNamespace
 }
 
-func (s *singleNamespace) VirtualLabelCluster(ctx *synccontext.SyncContext, pLabel string) (retLabel string, found bool) {
-	if keyMatchesSyncedLabels(ctx, pLabel) {
-		return pLabel, true
-	} else if !strings.HasPrefix(pLabel, LabelPrefix) {
-		return pLabel, true
-	}
-
-	defer func() {
-		recordLabelCluster(ctx, retLabel, pLabel)
-	}()
-
-	// check if the label is within the store
-	if ctx != nil && ctx.Mappings != nil && ctx.Mappings.Store() != nil {
-		vLabel, ok := ctx.Mappings.Store().HostToVirtualLabelCluster(ctx, pLabel)
-		if ok {
-			return vLabel, true
-		}
-	}
-
-	return "", false
-}
-
-func (s *singleNamespace) HostLabelCluster(ctx *synccontext.SyncContext, key string) (retLabel string) {
-	if keyMatchesSyncedLabels(ctx, key) {
-		return key
-	}
-
-	defer func() {
-		recordLabelCluster(ctx, key, retLabel)
-	}()
-
-	return hostLabelCluster(key, s.targetNamespace)
-}
-
-func (s *singleNamespace) VirtualLabel(ctx *synccontext.SyncContext, pLabel, vNamespace string) (retLabel string, found bool) {
-	if _, ok := pro.VirtualNamespaceMatchesMapping(ctx, vNamespace); ok {
-		return pLabel, true
-	} else if keyMatchesSyncedLabels(ctx, pLabel) {
-		return pLabel, true
-	} else if !strings.HasPrefix(pLabel, LabelPrefix) {
-		return pLabel, true
-	}
-
-	defer func() {
-		recordLabel(ctx, retLabel, pLabel)
-	}()
-
-	// check if the label is within the store
-	if ctx != nil && ctx.Mappings != nil && ctx.Mappings.Store() != nil {
-		vLabel, ok := ctx.Mappings.Store().HostToVirtualLabel(ctx, pLabel)
-		if ok {
-			return vLabel, true
-		}
-	}
-
-	return "", false
-}
-
-func (s *singleNamespace) HostLabel(ctx *synccontext.SyncContext, vLabel, vNamespace string) (retLabel string) {
-	if _, ok := pro.VirtualNamespaceMatchesMapping(ctx, vNamespace); ok {
-		return vLabel
-	} else if keyMatchesSyncedLabels(ctx, vLabel) {
-		return vLabel
-	}
-
-	// record rewriting
-	defer func() {
-		recordLabel(ctx, vLabel, retLabel)
-	}()
-
-	return convertLabelKeyWithPrefix(LabelPrefix, vLabel)
-}
-
-func recordLabel(ctx *synccontext.SyncContext, virtual, host string) {
-	if ctx != nil && ctx.Mappings != nil && ctx.Mappings.Store() != nil {
-		// check if we have the owning object in the context
-		belongsTo, ok := synccontext.MappingFrom(ctx)
-		if !ok {
-			return
-		}
-
-		// record the mapping
-		err := ctx.Mappings.Store().RecordLabel(ctx, synccontext.LabelMapping{
-			Virtual: virtual,
-			Host:    host,
-		}, belongsTo)
-		if err != nil {
-			klog.FromContext(ctx).Error(err, "record label mapping", "host", host, "virtual", virtual)
-		}
-	}
-}
-
-func recordLabelCluster(ctx *synccontext.SyncContext, virtual, host string) {
-	if ctx != nil && ctx.Mappings != nil && ctx.Mappings.Store() != nil {
-		// check if we have the owning object in the context
-		belongsTo, ok := synccontext.MappingFrom(ctx)
-		if !ok {
-			return
-		}
-
-		// record the mapping
-		err := ctx.Mappings.Store().RecordLabelCluster(ctx, synccontext.LabelMapping{
-			Virtual: virtual,
-			Host:    host,
-		}, belongsTo)
-		if err != nil {
-			klog.FromContext(ctx).Error(err, "record label mapping", "host", host, "virtual", virtual)
-		}
-	}
-}
-
-func keyMatchesSyncedLabels(ctx *synccontext.SyncContext, key string) bool {
-	if ctx != nil && ctx.Config != nil {
-		for _, k := range ctx.Config.Experimental.SyncSettings.SyncLabels {
-			if strings.HasSuffix(k, "*") && strings.HasPrefix(key, strings.TrimSuffix(k, "*")) {
-				return true
-			} else if k == key {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
 func HostLabelNamespace(key string) string {
 	return convertLabelKeyWithPrefix(NamespaceLabelPrefix, key)
 }
 
-func HostLabelSelectorNamespace(ctx *synccontext.SyncContext, labelSelector *metav1.LabelSelector) *metav1.LabelSelector {
-	return hostLabelSelector(ctx, labelSelector, func(_ *synccontext.SyncContext, key string) string {
+func HostLabelSelectorNamespace(labelSelector *metav1.LabelSelector) *metav1.LabelSelector {
+	return hostLabelSelector(labelSelector, func(key string) string {
 		return HostLabelNamespace(key)
 	})
 }
