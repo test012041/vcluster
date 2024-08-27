@@ -18,7 +18,7 @@ const (
 	pollingInterval     = time.Second * 2
 	pollingDurationLong = time.Minute * 2
 	filePath            = "commonValues.yaml"
-	chartPath           = "../../chart"
+	chartPath           = "../../../chart"
 )
 
 var _ = ginkgo.Describe("Test vCluster features", func() {
